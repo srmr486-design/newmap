@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V. 디지털 문화 - 인터랙티브 마인드맵</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    .node-text {
+      text-shadow: 0 1px 3px rgba(255, 255, 255, 0.95);
+      transition: fill 0.2s ease, font-weight 0.2s ease;
+    }
+    .dark .node-text {
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+    }
+    .link-path {
+      fill: none;
+      stroke-opacity: 0.55;
+      transition: stroke 0.3s ease, stroke-width 0.3s ease;
+    }
+    /* Fixed button styling with no scale transforms to eliminate hover shake */
+    .goal-btn-group {
+      cursor: pointer;
+    }
+    .goal-btn-bg {
+      fill: #059669;
+      stroke: #34d399;
+      stroke-width: 2px;
+      transition: fill 0.15s ease, stroke 0.15s ease;
+    }
+    .goal-btn-group:hover .goal-btn-bg {
+      fill: #047857;
+      stroke: #6ee7b7;
+    }
+    .goal-btn-text {
+      fill: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 h-screen w-screen relative">
+
+  <!-- Header & Toolbar -->
+  <header class="absolute top-4 left-5 right-5 z-20 flex items-center justify-between pointer-events-none">
+    <div class="pointer-events-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-5 py-3 rounded-2xl shadow-lg border border-slate-200/80 dark:border-slate-800 flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25">
+        <i class="fa-solid fa-network-wired text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          V. 디지털 문화
+          <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 font-semibold">수업용 마인드맵</span>
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400">노드를 클릭하면 해당 항목과 하위 내용에 맞춰 최적 크기로 자동 확대됩니다.</p>
+      </div>
+    </div>
+
+    <!-- Quick action controls -->
+    <div class="pointer-events-auto flex items-center space-x-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200/80 dark:border-slate-800">
+      <button id="btnResetView" title="처음으로 되돌리기" class="px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-rotate-left text-slate-500"></i>
+        <span>처음으로</span>
+      </button>
+      <button id="btnExpandAll" title="전체 펼치기" class="px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrows-split-up-and-left text-slate-500"></i>
+        <span>모두 펼치기</span>
+      </button>
+      <div class="h-5 w-px bg-slate-200 dark:bg-slate-800"></div>
+      <button id="btnZoomIn" title="확대" class="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+      <button id="btnZoomOut" title="축소" class="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition">
+        <i class="fa-solid fa-minus"></i>
+      </button>
+      <div class="h-5 w-px bg-slate-200 dark:bg-slate-800"></div>
+      <button id="btnToggleDark" title="다크/라이트 모드" class="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-amber-500 dark:text-amber-400 transition">
+        <i class="fa-solid fa-moon dark:hidden"></i>
+        <i class="fa-solid fa-sun hidden dark:inline"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Mindmap Canvas -->
+  <main id="mindmap-container" class="w-full h-full cursor-grab active:cursor-grabbing relative"></main>
+
+  <!-- Giant Learning Goals Modal (Classroom Screen Maximized) -->
+  <div id="learningGoalModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300 p-4 md:p-8 lg:p-12">
+    <div id="modalBox" class="relative w-full max-w-7xl max-h-[94vh] overflow-y-auto bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white rounded-3xl shadow-2xl border-2 border-emerald-500/60 p-6 sm:p-10 md:p-14 flex flex-col justify-between transform scale-95 transition-all duration-300">
+      
+      <!-- Top Title Area -->
+      <div>
+        <div class="flex items-start justify-between pb-6 border-b border-slate-800">
+          <div class="flex items-center gap-4">
+            <span class="px-5 py-2.5 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-base sm:text-xl md:text-2xl font-black tracking-wide flex items-center gap-2.5">
+              <i class="fa-solid fa-bullseye text-emerald-400 animate-pulse"></i> 이번 시간 핵심 목표
+            </span>
+            <span class="text-slate-400 text-base sm:text-lg md:text-xl font-semibold hidden sm:inline">2. 정보 공유와 정보 보안 &gt; 정보 공유</span>
+          </div>
+          <button id="btnCloseModal" class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-slate-800/90 hover:bg-rose-600 text-slate-300 hover:text-white transition-all flex items-center justify-center text-2xl md:text-3xl shadow-lg">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <h2 class="text-3xl sm:text-4xl md:text-6xl font-black text-white mt-6 mb-8 md:mb-12 tracking-tight leading-tight">
+          🎯 <span class="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300">오늘의 학습목표</span>
+        </h2>
+
+        <!-- Extra Large Goal Items for Classroom Projection -->
+        <div class="space-y-6 md:space-y-8">
+          
+          <!-- Goal 1 -->
+          <div class="relative bg-slate-800/80 border-2 border-slate-700/80 hover:border-emerald-400 rounded-3xl p-6 sm:p-8 md:p-10 transition-all duration-200 shadow-xl flex items-start gap-5 sm:gap-8">
+            <div class="shrink-0 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-3xl sm:text-4xl md:text-5xl font-black shadow-lg shadow-emerald-500/30">
+              1
+            </div>
+            <div class="flex-1">
+              <p class="text-2xl sm:text-3xl md:text-5xl font-black text-white leading-snug tracking-tight">
+                <span class="text-rose-400 underline decoration-rose-500 decoration-wavy underline-offset-8">보호해야 할 정보</span>와 
+                <span class="text-emerald-400 underline decoration-emerald-500 decoration-wavy underline-offset-8">공유해야 할 정보</span>를 구분할 수 있다.
+              </p>
+              <p class="mt-4 text-base sm:text-lg md:text-2xl text-slate-300 font-medium leading-relaxed">
+                개인정보·금융정보 등 보호해야 할 데이터와 공공데이터·오픈소스 등 나눌 수 있는 지식의 차이를 파악합니다.
+              </p>
+            </div>
+          </div>
+
+          <!-- Goal 2 -->
+          <div class="relative bg-slate-800/80 border-2 border-slate-700/80 hover:border-teal-400 rounded-3xl p-6 sm:p-8 md:p-10 transition-all duration-200 shadow-xl flex items-start gap-5 sm:gap-8">
+            <div class="shrink-0 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center text-white text-3xl sm:text-4xl md:text-5xl font-black shadow-lg shadow-teal-500/30">
+              2
+            </div>
+            <div class="flex-1">
+              <p class="text-2xl sm:text-3xl md:text-5xl font-black text-white leading-snug tracking-tight">
+                <span class="text-teal-300 underline decoration-teal-400 decoration-wavy underline-offset-8">CCL</span>을 활용하여 저작물을 공유할 수 있다.
+              </p>
+              <p class="mt-4 text-base sm:text-lg md:text-2xl text-slate-300 font-medium leading-relaxed">
+                저작자표시(BY), 비영리(NC), 변경금지(ND), 동일조건변경허락(SA) 등 올바른 이용허락조건을 적용합니다.
+              </p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Bottom Button -->
+      <div class="mt-8 md:mt-12 flex justify-end">
+        <button id="btnConfirmModal" class="px-8 py-4 sm:px-12 sm:py-5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xl sm:text-2xl md:text-3xl rounded-2xl shadow-xl shadow-emerald-600/30 transition-all flex items-center gap-3">
+          <span>확인 (수업 진행)</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- Data Definition ---
+    const mindmapData = {
+      id: "root",
+      name: "V. 디지털 문화",
+      level: 0,
+      color: "#6366f1",
+      children: [
+        {
+          id: "sub-1",
+          name: "1. 디지털 사회",
+          level: 1,
+          color: "#0284c7",
+          children: [
+            { id: "sub-1-1", name: "디지털 리터러시", level: 2, color: "#0ea5e9" },
+            { id: "sub-1-2", name: "디지털 기술과 진로", level: 2, color: "#38bdf8" }
+          ]
+        },
+        {
+          id: "sub-2",
+          name: "2. 정보 공유와 정보 보안",
+          level: 1,
+          color: "#10b981",
+          children: [
+            {
+              id: "sub-2-1",
+              name: "정보 공유",
+              level: 2,
+              color: "#059669",
+              hasLearningGoalBtn: true,
+              children: [
+                { id: "sub-2-1-1", name: "공유해야 할 정보", level: 3, color: "#10b981" },
+                { id: "sub-2-1-2", name: "보호해야 할 정보", level: 3, color: "#34d399" },
+                { id: "sub-2-1-3", name: "올바른 정보 공유 방법 (CCL)", level: 3, color: "#6ee7b7" }
+              ]
+            },
+            {
+              id: "sub-2-2",
+              name: "정보 보안",
+              level: 2,
+              color: "#e11d48",
+              children: [
+                { id: "sub-2-2-1", name: "정보보안의 주요 요소", level: 3, color: "#f43f5e" },
+                { id: "sub-2-2-2", name: "정보 보안 실천 방법", level: 3, color: "#fb7185" }
+              ]
+            }
+          ]
+        }
+      ]
+    };
+
+    // --- Container & Canvas Sizing ---
+    const container = document.getElementById("mindmap-container");
+    let width = container.clientWidth;
+    let height = container.clientHeight;
+
+    const svg = d3.select(container)
+      .append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("viewBox", [0, 0, width, height]);
+
+    const g = svg.append("g").attr("class", "mindmap-canvas");
+
+    // D3 Zoom Setup
+    const zoom = d3.zoom()
+      .scaleExtent([0.2, 3.8])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+
+    svg.call(zoom).on("dblclick.zoom", null);
+
+    // Tree Layout Configuration (Spacious horizontal tree)
+    const treeLayout = d3.tree()
+      .nodeSize([84, 280])
+      .separation((a, b) => (a.parent === b.parent ? 1.2 : 1.5));
+
+    let root = d3.hierarchy(mindmapData);
+
+    // Subtree collapse helper
+    function collapseSubtree(d) {
+      if (d.children) {
+        d._children = d.children;
+        d._children.forEach(collapseSubtree);
+        d.children = null;
+      }
+    }
+
+    // Initial state: ALL nodes collapsed under root (only grand topic visible)
+    if (root.children) {
+      root._children = root.children;
+      root._children.forEach(collapseSubtree);
+      root.children = null;
+    }
+
+    let i = 0;
+
+    // --- Update Tree Function ---
+    function update(source, targetFocusNode = null) {
+      const treeData = treeLayout(root);
+      const nodes = treeData.descendants();
+      const links = treeData.links();
+
+      // Normalize depth distance
+      nodes.forEach(d => {
+        d.y = d.depth * 280;
+      });
+
+      // ----------------- Links -----------------
+      const link = g.selectAll("path.link-path")
+        .data(links, d => d.target.data.id);
+
+      const linkEnter = link.enter()
+        .insert("path", "g")
+        .attr("class", "link-path")
+        .attr("stroke", d => d.target.data.color || "#94a3b8")
+        .attr("stroke-width", d => Math.max(2, 6 - d.target.depth * 1.2))
+        .attr("d", d => {
+          const o = { x: source.x0 ?? source.x, y: source.y0 ?? source.y };
+          return diagonal({ source: o, target: o });
+        });
+
+      const linkUpdate = linkEnter.merge(link);
+      linkUpdate.transition()
+        .duration(500)
+        .attr("d", d => diagonal(d))
+        .attr("stroke", d => d.target.data.color || "#94a3b8")
+        .attr("stroke-width", d => Math.max(2, 6 - d.target.depth * 1.2));
+
+      link.exit().transition()
+        .duration(400)
+        .attr("d", d => {
+          const o = { x: source.x, y: source.y };
+          return diagonal({ source: o, target: o });
+        })
+        .remove();
+
+      // ----------------- Nodes -----------------
+      const node = g.selectAll("g.node-group")
+        .data(nodes, d => d.data.id || (d.id = ++i));
+
+      const nodeEnter = node.enter()
+        .append("g")
+        .attr("class", "node-group")
+        .attr("transform", d => `translate(${source.y0 ?? source.y},${source.x0 ?? source.x})`)
+        .attr("cursor", "pointer");
+
+      // Main Node Circle
+      nodeEnter.append("circle")
+        .attr("class", "node-circle transition-all duration-200")
+        .attr("r", 1e-6)
+        .attr("fill", d => d.data.color)
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", 3.5)
+        .style("filter", "drop-shadow(0 4px 6px rgba(0,0,0,0.15))")
+        .on("click", (event, d) => handleNodeClick(event, d));
+
+      // Expand/Collapse Badge (+ / -)
+      const badge = nodeEnter.append("g")
+        .attr("class", "badge-indicator pointer-events-none")
+        .attr("transform", "translate(0, 0)");
+
+      badge.append("circle")
+        .attr("r", d => d.depth === 0 ? 0 : 8)
+        .attr("fill", "#ffffff")
+        .attr("stroke", d => d.data.color)
+        .attr("stroke-width", 2);
+
+      badge.append("text")
+        .attr("text-anchor", "middle")
+        .attr("dy", "3.5px")
+        .attr("font-size", "10px")
+        .attr("font-weight", "900")
+        .attr("fill", d => d.data.color)
+        .text(d => d._children ? "+" : (d.children ? "−" : ""));
+
+      // Node Label Text
+      nodeEnter.append("text")
+        .attr("class", "node-text select-none font-bold tracking-tight")
+        .attr("dy", ".35em")
+        .attr("x", d => (d.depth === 0 ? -24 : 22))
+        .attr("text-anchor", d => (d.depth === 0 ? "end" : "start"))
+        .attr("font-size", d => d.depth === 0 ? "20px" : (d.depth === 1 ? "17px" : "15px"))
+        .attr("fill", d => document.body.classList.contains("dark") ? "#f1f5f9" : "#0f172a")
+        .text(d => d.data.name)
+        .on("click", (event, d) => handleNodeClick(event, d));
+
+      // Jitter-free <학습목표> button next to '정보 공유' node
+      const goalBtn = nodeEnter.filter(d => !!d.data.hasLearningGoalBtn)
+        .append("g")
+        .attr("class", "goal-btn-group")
+        .attr("transform", "translate(100, -14)")
+        .on("mouseenter", (e) => e.stopPropagation())
+        .on("mouseleave", (e) => e.stopPropagation())
+        .on("mousedown", (e) => e.stopPropagation())
+        .on("touchstart", (e) => e.stopPropagation())
+        .on("click", (event) => {
+          event.stopPropagation();
+          showLearningGoalModal();
+        });
+
+      goalBtn.append("rect")
+        .attr("class", "goal-btn-bg")
+        .attr("width", 86)
+        .attr("height", 28)
+        .attr("rx", 14)
+        .attr("ry", 14);
+
+      goalBtn.append("text")
+        .attr("class", "goal-btn-text")
+        .attr("x", 43)
+        .attr("y", 18)
+        .attr("text-anchor", "middle")
+        .text("🎯 학습목표");
+
+      // Node Update
+      const nodeUpdate = nodeEnter.merge(node);
+
+      nodeUpdate.transition()
+        .duration(500)
+        .attr("transform", d => `translate(${d.y},${d.x})`);
+
+      nodeUpdate.select("circle.node-circle")
+        .attr("r", d => d.depth === 0 ? 16 : (d.depth === 1 ? 13 : 9))
+        .attr("fill", d => d.data.color);
+
+      nodeUpdate.select(".badge-indicator circle")
+        .attr("r", d => (d._children || d.children) ? 7.5 : 0);
+
+      nodeUpdate.select(".badge-indicator text")
+        .text(d => d._children ? "+" : (d.children ? "−" : ""));
+
+      nodeUpdate.select("text.node-text")
+        .attr("fill", d => document.body.classList.contains("dark") ? "#f1f5f9" : "#0f172a");
+
+      // Node Exit
+      node.exit().transition()
+        .duration(400)
+        .attr("transform", d => `translate(${source.y},${source.x})`)
+        .remove();
+
+      nodes.forEach(d => {
+        d.x0 = d.x;
+        d.y0 = d.y;
+      });
+
+      // Auto-fit & Zoom to clicked node + its visible subtree
+      if (targetFocusNode) {
+        fitToSubtree(targetFocusNode);
+      }
+    }
+
+    // Bezier curve generator
+    function diagonal(d) {
+      return `M ${d.source.y} ${d.source.x}
+              C ${(d.source.y + d.target.y) / 2} ${d.source.x},
+                ${(d.source.y + d.target.y) / 2} ${d.target.x},
+                ${d.target.y} ${d.target.x}`;
+    }
+
+    // --- Node Click Handler ---
+    function handleNodeClick(event, d) {
+      event.stopPropagation();
+
+      // Toggle children
+      if (d.children) {
+        d._children = d.children;
+        d.children = null;
+      } else if (d._children) {
+        d.children = d._children;
+        d._children = null;
+      }
+
+      // Re-render and auto-zoom to this node and its subtree
+      update(d, d);
+    }
+
+    // --- Dynamic Subtree Bounding Box Auto-Zoom (Largest Legible Font) ---
+    function fitToSubtree(focusNode) {
+      const visibleSubtreeNodes = focusNode.descendants();
+      if (!visibleSubtreeNodes || visibleSubtreeNodes.length === 0) return;
+
+      // Calculate bounding box in D3 coordinates (x = vertical, y = horizontal)
+      let minY = Infinity, maxY = -Infinity;
+      let minX = Infinity, maxX = -Infinity;
+
+      visibleSubtreeNodes.forEach(node => {
+        const textWidth = (node.data.name.length * 16) + (node.data.hasLearningGoalBtn ? 115 : 30);
+        const left = node.y - (node.depth === 0 ? 150 : 30);
+        const right = node.y + (node.depth === 0 ? 30 : textWidth);
+        
+        if (left < minY) minY = left;
+        if (right > maxY) maxY = right;
+
+        const top = node.x - 45;
+        const bottom = node.x + 45;
+
+        if (top < minX) minX = top;
+        if (bottom > maxX) maxX = bottom;
+      });
+
+      const bboxWidth = Math.max(160, maxY - minY);
+      const bboxHeight = Math.max(120, maxX - minX);
+
+      const centerX = (minY + maxY) / 2;
+      const centerY = (minX + maxX) / 2;
+
+      // Scale to occupy approximately 82% of screen area
+      const padRatio = 0.82;
+      const scaleX = (width * padRatio) / bboxWidth;
+      const scaleY = (height * padRatio) / bboxHeight;
+
+      // Bound magnification between 0.75 and 2.4 for crystal-clear readability
+      let optimalScale = Math.min(scaleX, scaleY);
+      optimalScale = Math.max(0.75, Math.min(2.4, optimalScale));
+
+      const translateX = (width / 2) - (centerX * optimalScale);
+      const translateY = (height / 2) - (centerY * optimalScale);
+
+      const targetTransform = d3.zoomIdentity
+        .translate(translateX, translateY)
+        .scale(optimalScale);
+
+      svg.transition()
+        .duration(700)
+        .ease(d3.easeCubicOut)
+        .call(zoom.transform, targetTransform);
+    }
+
+    // Initial root centered view
+    function focusRootOnly() {
+      const initialScale = 1.6;
+      const initialTranslateX = width * 0.35;
+      const initialTranslateY = height / 2;
+
+      svg.transition()
+        .duration(600)
+        .call(zoom.transform, d3.zoomIdentity.translate(initialTranslateX, initialTranslateY).scale(initialScale));
+    }
+
+    // --- Modal Management ---
+    const modal = document.getElementById("learningGoalModal");
+    const modalBox = document.getElementById("modalBox");
+    const btnCloseModal = document.getElementById("btnCloseModal");
+    const btnConfirmModal = document.getElementById("btnConfirmModal");
+
+    function showLearningGoalModal() {
+      modal.classList.remove("opacity-0", "pointer-events-none");
+      modal.classList.add("opacity-100", "pointer-events-auto");
+      modalBox.classList.remove("scale-95");
+      modalBox.classList.add("scale-100");
+    }
+
+    function hideLearningGoalModal() {
+      modal.classList.add("opacity-0", "pointer-events-none");
+      modal.classList.remove("opacity-100", "pointer-events-auto");
+      modalBox.classList.add("scale-95");
+      modalBox.classList.remove("scale-100");
+    }
+
+    btnCloseModal.addEventListener("click", hideLearningGoalModal);
+    btnConfirmModal.addEventListener("click", hideLearningGoalModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) hideLearningGoalModal();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hideLearningGoalModal();
+    });
+
+    // --- Toolbar Buttons ---
+    document.getElementById("btnResetView").addEventListener("click", () => {
+      if (root.children) {
+        root._children = root.children;
+        root._children.forEach(collapseSubtree);
+        root.children = null;
+      }
+      update(root);
+      focusRootOnly();
+    });
+
+    document.getElementById("btnExpandAll").addEventListener("click", () => {
+      function expand(d) {
+        if (d._children) {
+          d.children = d._children;
+          d._children = null;
+        }
+        if (d.children) {
+          d.children.forEach(expand);
+        }
+      }
+      expand(root);
+      update(root, root);
+    });
+
+    document.getElementById("btnZoomIn").addEventListener("click", () => {
+      svg.transition().duration(300).call(zoom.scaleBy, 1.25);
+    });
+
+    document.getElementById("btnZoomOut").addEventListener("click", () => {
+      svg.transition().duration(300).call(zoom.scaleBy, 0.8);
+    });
+
+    // Dark Mode Toggle
+    document.getElementById("btnToggleDark").addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+      d3.selectAll("text.node-text")
+        .attr("fill", document.body.classList.contains("dark") ? "#f1f5f9" : "#0f172a");
+    });
+
+    // Window Resize Handler
+    window.addEventListener("resize", () => {
+      width = container.clientWidth;
+      height = container.clientHeight;
+      svg.attr("viewBox", [0, 0, width, height]);
+    });
+
+    // --- Initial Execution ---
+    root.x0 = 0;
+    root.y0 = 0;
+    update(root);
+    focusRootOnly();
+  </script>
+</body>
+</html>
